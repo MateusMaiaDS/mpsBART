@@ -65,16 +65,26 @@ rbart <- function(x_train,
      min_y <- min(y)
      max_y <- max(y)
 
-     absolut_min <- min(min(x_train_scale[,1]),min(x_test_scale[,1]))
-     absolut_max <- max(max(x_train_scale[,1]),max(x_test_scale[,1]))
-
+     # Getting the min and max for each column
+     min_x <- apply(x_train_scale,2,min)
+     max_x <- apply(x_train, 2, max)
      # Getting the internal knots
-     knots <- quantile(x_train_scale[,1],seq(0,1,length.out = nIknots+2))[-c(1,nIknots+2)]
+     knots <- apply(x_train_scale,
+                    2,
+                    function(x){quantile(x,seq(0,1,length.out = nIknots+2))[-c(1,nIknots+2)]})
+
+     # Creating a array of basis functions (only for continuous variables)
+     continuous_vars <- col_names[!(col_names %in% dummy_x$facVars)]
+
+     B_train_arr <- array(data = NA,
+                          dim = c(ncol(x_train_scale[,continuous_vars, drop = FALSE]),
+                                  length(y),
+                                  nrow(knots)+3))
 
      # Creating the B spline
-     B_train <- as.matrix(splines::ns(x = x_train_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE],knots = knots,
+     B_train <- as.matrix(splines::ns(x = x_train_scale[,continuous_vars[1], drop = FALSE],knots = knots[,continuous_vars[1]],
                                       intercept = FALSE,
-                                      Boundary.knots = c(absolut_min,absolut_max)))
+                                      Boundary.knots = c(min_x[1],max_x[1])))
      B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE]))
 
      # === Directly getting the Pnealised version over the basis function
