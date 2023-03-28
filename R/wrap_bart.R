@@ -79,24 +79,33 @@ rbart <- function(x_train,
      B_train_arr <- array(data = NA,
                           dim = c(ncol(x_train_scale[,continuous_vars, drop = FALSE]),
                                   length(y),
-                                  nrow(knots)+3))
+                                  nrow(knots)+1))
 
-     # Creating the B spline
-     B_train <- as.matrix(splines::ns(x = x_train_scale[,continuous_vars[1], drop = FALSE],knots = knots[,continuous_vars[1]],
-                                      intercept = FALSE,
-                                      Boundary.knots = c(min_x[1],max_x[1])))
-     B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE]))
+     B_test_arr <- array(data = NA,
+                          dim = c(ncol(x_test_scale[,continuous_vars, drop = FALSE]),
+                                  nrow(x_test_scale),
+                                  nrow(knots)+1))
+
+     # Creating the natural B-spline for each predictor
+     for(i in 1:length(continuous_vars)){
+             B_train_arr[i,,] <- as.matrix(splines::ns(x = x_train_scale[,continuous_vars[i], drop = FALSE],knots = knots[,continuous_vars[1]],
+                                              intercept = FALSE,
+                                              Boundary.knots = c(min_x[i],max_x[i])))
+             B_test_arr[i,,] <- as.matrix(predict(B_train,newx = x_test_scale[,continuous_vars[i], drop = FALSE]))
+     }
 
      # === Directly getting the Pnealised version over the basis function
      #see (Eilers, 2010) and look for reference 26 in the text
      #=====
      if(dif_order!=0){
-             D <- D_gen(p = ncol(B_train),n_dif = dif_order)
+             D <- D_gen(p = ncol(B_train_arr[1,,]),n_dif = dif_order)
 
-             # IN CASE WE WANT TO USE THE DIFFERENCE PENALISATION DIRECTLY OVER THE
-             #BASIS FUNCTION
-             B_train <- B_train%*%crossprod(D,solve(tcrossprod(D)))
-             B_test <- B_test%*%crossprod(D,solve(tcrossprod(D)))
+             for(i in 1:length(continuous_vars)){
+                     # IN CASE WE WANT TO USE THE DIFFERENCE PENALISATION DIRECTLY OVER THE
+                     #BASIS FUNCTION
+                     B_train_arr[i,,] <- B_train_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
+                     B_test_arr[i,,] <- B_test_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
+             }
      }
      # Adding the intercept
      # B_train <- cbind(1,B_train)
