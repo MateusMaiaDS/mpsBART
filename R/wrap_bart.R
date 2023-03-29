@@ -88,34 +88,37 @@ rbart <- function(x_train,
 
      # Creating the natural B-spline for each predictor
      for(i in 1:length(continuous_vars)){
-             B_train_arr[i,,] <- as.matrix(splines::ns(x = x_train_scale[,continuous_vars[i], drop = FALSE],knots = knots[,continuous_vars[1]],
-                                              intercept = FALSE,
-                                              Boundary.knots = c(min_x[i],max_x[i])))
-             B_test_arr[i,,] <- as.matrix(predict(B_train,newx = x_test_scale[,continuous_vars[i], drop = FALSE]))
+             B_train_obj <- splines::ns(x = x_train_scale[,continuous_vars[i], drop = FALSE],knots = knots[,continuous_vars[1]],
+                                        intercept = FALSE,
+                                        Boundary.knots = c(min_x[i],max_x[i]))
+             B_train_arr[i,,] <- as.matrix(B_train_obj)
+             B_test_arr[i,,] <- as.matrix(predict(B_train_obj,newx = x_test_scale[,continuous_vars[i], drop = FALSE]))
      }
 
      # === Directly getting the Pnealised version over the basis function
      #see (Eilers, 2010) and look for reference 26 in the text
      #=====
      if(dif_order!=0){
+
+             Z_train_arr <- array(data = NA,
+                                  dim = c(ncol(x_train_scale[,continuous_vars, drop = FALSE]),
+                                          nrow(x_train_scale),
+                                          nrow(knots)+1-dif_order)) # correcting the new dimension by P
+
+             Z_test_arr <- array(data = NA,
+                                 dim = c(ncol(x_test_scale[,continuous_vars, drop = FALSE]),
+                                         nrow(x_test_scale),
+                                         nrow(knots)+1-dif_order))# correcting the new dimension by P
+
              D <- D_gen(p = ncol(B_train_arr[1,,]),n_dif = dif_order)
 
              for(i in 1:length(continuous_vars)){
                      # IN CASE WE WANT TO USE THE DIFFERENCE PENALISATION DIRECTLY OVER THE
                      #BASIS FUNCTION
-                     B_train_arr[i,,] <- B_train_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
-                     B_test_arr[i,,] <- B_test_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
+                     Z_train_arr[i,,] <- B_train_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
+                     Z_test_arr[i,,] <- B_test_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
              }
      }
-     # Adding the intercept
-     # B_train <- cbind(1,B_train)
-     # B_test <- cbind(1,B_test)
-     # B_train <- cbind(1,x_train_scale)
-     # B_test <- cbind(1,x_test_scale)
-
-     # Transforming back to matrix
-     # x_train_scale <- as.matrix(B_train)
-     # x_test_scale <- as.matrix(B_test)
 
      # Scaling "y"
      if(scale_bool){
@@ -128,10 +131,6 @@ rbart <- function(x_train,
         tau_b_0 <- tau_b <- tau_mu <- (4*n_tree*(kappa^2))/((max_y-min_y)^2)
      }
 
-
-     # Calculating \tau_{mu}
-     # tau_b_0 <- tau_b <- tau_mu <- (4*n_tree*(kappa^2))
-     # tau_b <- n_tree
 
      # Getting the naive sigma value
      nsigma <- naive_sigma(x = x_train_scale,y = y_scale)
@@ -153,16 +152,13 @@ rbart <- function(x_train,
      # Creating the vector that stores all trees
      all_tree_post <- vector("list",length = round(n_mcmc-n_burn))
 
-     # Old version
-     # rate_d_tau <- optim(par = 1,d_tau_rate,method = "L-BFGS-B",lower = 0,
-     #                     df = df_tau_b, prob = prob_tau_b,kappa = kappa,
-     #                     n_tree = n_tree)
-
-
 
      # Another way to define the prior for \tau_b
      a_tau_b <- 0.5*df_tau_b
 
+
+     # Getting the number of basis
+     d_pred <- dim(B_train_arr)[1]
 
      # Getting the \tau_b
      naive_tau_b <- optim(par = rep(1, 2), fn = nll, dat=y_scale,

@@ -9,12 +9,13 @@ struct modelParam {
         arma::mat x_train;
         arma::vec y;
         arma::mat x_test;
-        arma::mat B_train;
-        arma::mat B_test;
+        arma::cube Z_train;
+        arma::cube Z_test;
 
         // BART prior param specification
         int n_tree;
-        int p;
+        int p; // Dimension of basis matrix
+        int d_pred;
         double alpha;
         double beta;
         double tau_mu;
@@ -40,8 +41,8 @@ struct modelParam {
         modelParam(arma::mat x_train_,
                    arma::vec y_,
                    arma::mat x_test_,
-                   arma::mat B_train_,
-                   arma::mat B_test_,
+                   arma::cube B_train_,
+                   arma::cube B_test_,
                    int n_tree_,
                    double alpha_,
                    double beta_,

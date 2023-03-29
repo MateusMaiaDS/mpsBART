@@ -161,8 +161,8 @@ arma::mat bspline(arma::vec x,
 modelParam::modelParam(arma::mat x_train_,
                        arma::vec y_,
                        arma::mat x_test_,
-                       arma::mat B_train_,
-                       arma::mat B_test_,
+                       arma::cube B_train_,
+                       arma::cube B_test_,
                        int n_tree_,
                        double alpha_,
                        double beta_,
@@ -188,6 +188,7 @@ modelParam::modelParam(arma::mat x_train_,
         B_test = B_test_;
         n_tree = n_tree_;
         p = B_train_.n_cols;
+        d_pred = B_train_.n_slices;
         alpha = alpha_;
         beta = beta_;
         tau_mu = tau_mu_;
@@ -1100,51 +1101,7 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
 // }
 
 
-// Calculating the Loglilelihood of a node
-void Node::nodeLogLike(modelParam& data, arma::vec &curr_res){
 
-
-        // When we generate empty nodes we don't want to accept them;
-        if(train_index[0]==-1){
-                r_sum = 0;
-                r_sq_sum = 10000;
-                n_leaf = 0;
-                log_likelihood = -2000000; // Absurd value avoid this case
-                return;
-        }
-
-        r_sum = 0;
-        r_sq_sum = 0;
-        n_leaf = 0;
-
-        for(int i = 0; i<data.x_train.n_rows; i++){
-
-                // Exiting before
-                if(train_index[i]==-1){
-                        break;
-                }
-
-                // Calculating node quantities
-                r_sum = r_sum + curr_res(train_index[i]);
-                r_sq_sum = r_sq_sum + curr_res(train_index[i])*curr_res(train_index[i]);
-                n_leaf = n_leaf + 1;
-
-        }
-
-        log_likelihood = - 0.5*data.tau*r_sq_sum - 0.5*log(data.tau_mu + (n_leaf*data.tau)) + (0.5*(data.tau*data.tau)*(r_sum*r_sum))/( (data.tau*n_leaf)+data.tau_mu);
-
-        return;
-
-}
-
-//[[Rcpp::export]]
-arma::vec matrix_tests(arma::mat matrix, arma::vec vector){
-        arma::rowvec col_sum = arma::sum(matrix,0);
-        arma::mat P_aux = col_sum.t()*col_sum;
-        // cout << "Matrix dimensions" << col_sum.
-        arma::vec vec_mult = col_sum*vector;
-        return vec_mult;
-}
 
 // Calculating the Loglilelihood of a node
 void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
@@ -1169,10 +1126,12 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         }
 
         // Creating the B spline
-        arma::mat leaf_x(n_leaf,data.B_train.n_cols,arma::fill::ones);
-        arma::mat leaf_x_test(n_leaf_test,data.B_train.n_cols,arma::fill::ones);
+        arma::cube leaf_x(n_leaf,data.B_train.n_cols,data.x_train.n_cols,arma::fill::zeros);
+        arma::mat leaf_x_test(n_leaf_test,data.B_train.n_cols,data.x_train.n_cols,arma::fill::ones);
         arma::vec leaf_res_(n_leaf);
 
+        // Need to iterate a d-level
+        for(int k = 0; k < data.x_train)
         for(int i = 0; i < n_leaf;i++){
                 for(int j = 0 ; j < data.B_train.n_cols; j++){
                         leaf_x(i,j) = data.B_train(train_index[i],j);
@@ -1756,6 +1715,11 @@ arma::vec rMVNslow(const arma::vec& b, const arma::mat& Q){
         arma::vec sample = arma::randn<arma::mat>(Q.n_cols);
         return arma::chol(Q,"lower")*sample + b;
 
+}
+
+//[[Rcpp::export]]
+arma::mat matrix_mat(arma::cube array){
+        return array.slice(1).t()*array.slice(2);
 }
 
 
