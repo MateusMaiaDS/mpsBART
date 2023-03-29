@@ -101,14 +101,14 @@ rbart <- function(x_train,
      if(dif_order!=0){
 
              Z_train_arr <- array(data = NA,
-                                  dim = c(ncol(x_train_scale[,continuous_vars, drop = FALSE]),
-                                          nrow(x_train_scale),
-                                          nrow(knots)+1-dif_order)) # correcting the new dimension by P
+                                  dim = c(nrow(x_train_scale),
+                                          nrow(knots)+1-dif_order,
+                                          ncol(x_train_scale[,continuous_vars, drop = FALSE]))) # correcting the new dimension by P
 
              Z_test_arr <- array(data = NA,
-                                 dim = c(ncol(x_test_scale[,continuous_vars, drop = FALSE]),
-                                         nrow(x_test_scale),
-                                         nrow(knots)+1-dif_order))# correcting the new dimension by P
+                                 dim = c(nrow(x_test_scale),
+                                         nrow(knots)+1-dif_order,
+                                         ncol(x_test_scale[,continuous_vars, drop = FALSE])))# correcting the new dimension by P
 
              D <- D_gen(p = ncol(B_train_arr[1,,]),n_dif = dif_order)
 

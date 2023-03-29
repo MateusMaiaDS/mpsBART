@@ -18,11 +18,18 @@ y <- fried_sim$y
 x <- as.data.frame(x)
 x_test <- as.data.frame(x_new)
 
+
+t_array(arr_m = Z_train_arr,exclude_int = 1)
+a <- exclude_array(arr_m = dummy_x_train_m,exclude_int = 4)
+b <- dummy_x_train_m[,-5] %>% rowSums()
+sum(a-b)
 # Testing the GP-BART
 bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x_test,
                    n_tree = 10,n_mcmc = 2500,alpha = 0.95,dif_order = 2,
                    beta = 2,nIknots = 20,delta = 1,
                    n_burn = 500,scale_bool = TRUE)
+
+
 
 # Convergence plots
 par(mfrow = c(3,1))
