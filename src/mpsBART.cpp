@@ -1177,7 +1177,7 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         for(int i = 0; i < data.d_var;i++){
                 Z.slice(i) = leaf_x;
                 Z_test.slice(i) = leaf_x_test;
-                Z_t.slice(i) = Z.t();
+                Z_t.slice(i) = Z.slice(i).t();
                 z_t_ones.col(i) = Z_t.slice(i)*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
                 res_cov = res_cov + (1/data.tau_b(i))*Z.slice(i)*Z_t.slice(i);
         }
@@ -1216,7 +1216,7 @@ void updateBeta(Node* tree, modelParam &data){
                 }
 
                 // Calculating a cube with all {Z^(j)}\beta
-                arma::mat Z_j_beta(t_nodes[i]->n_leaf,t_nodes[i]->.d_var,arma::fill:ones);
+                arma::mat Z_j_beta(t_nodes[i]->n_leaf,data.d_var,arma::fill::ones);
                 for(int k = 0; k<data.d_var;k++){
                         Z_j_beta.col(k) = t_nodes[i]->Z.slice(k)*t_nodes[i]->betas.col(k);
                 }
@@ -1255,10 +1255,9 @@ void updateGamma(Node* tree, modelParam &data){
                 double sum_beta_z_one = 0;
 
                 for(int j = 0; j<data.d_var;j++){
-                        sum_beta_z_one = sum_beta_z_one + t_nodes[i]->betas.cols(j)*(t_nodes[i]->z_t_ones.col(j))
+                        sum_beta_z_one = sum_beta_z_one + arma::as_scalar(t_nodes[i]->betas.col(j)*(t_nodes[i]->z_t_ones.col(j)));
                 }
 
-                arma::vec mean_aux = t_nodes[i]->betas.t()*(t_nodes[i]->b_t_ones);
                 // cout << "Beta_zero_mean " << endl;
                 double gamma_mean = ((1/s_gamma)*(accu(t_nodes[i]->leaf_res)-sum_beta_z_one));
                 // cout << "Error sample" << endl;
@@ -1383,10 +1382,9 @@ void updateTauB(Forest all_trees,
 
         }
 
-        for(int j = 0; j < data.d_var; j++)){
-                data.tau_b(j) = R::rgamma((0.5*beta_count_total(j) + 0.5*data.nu),1/(0.5*beta_sq_sum_total(j)+0.5*data.delta*data.nu));
+        for(int j = 0; j < data.d_var; j++){
+                data.tau_b(j) = R::rgamma((0.5*beta_count_total(j) + 0.5*data.nu),1/(0.5*beta_sq_sum_total(j)+0.5*data.delta(j)*data.nu));
         }
-
         return;
 
 }
@@ -1444,8 +1442,8 @@ void updateTauBintercept(Forest all_trees,
 Rcpp::List sbart(arma::mat x_train,
           arma::vec y_train,
           arma::mat x_test,
-          arma::cube B_train,
-          arma::cube B_test,
+          arma::cube Z_train,
+          arma::cube Z_test,
           int n_tree,
           int n_mcmc,
           int n_burn,
@@ -1464,8 +1462,8 @@ Rcpp::List sbart(arma::mat x_train,
         modelParam data(x_train,
                         y_train,
                         x_test,
-                        B_train,
-                        B_test,
+                        Z_train,
+                        Z_test,
                         n_tree,
                         alpha,
                         beta,
@@ -1492,7 +1490,7 @@ Rcpp::List sbart(arma::mat x_train,
         arma::mat y_test_hat_post = arma::zeros<arma::mat>(data.x_test.n_rows,n_post);
         arma::cube all_tree_post(y_train.size(),n_tree,n_post,arma::fill::zeros);
         arma::vec tau_post = arma::zeros<arma::vec>(n_post);
-        arma::vec tau_b_post = arma::zeros<arma::vec>(n_post);
+        arma::mat tau_b_post = arma::zeros<arma::vec>(n_post,data.d_var);
         arma::vec tau_b_post_intercept = arma::zeros<arma::vec>(n_post);
 
 
@@ -1603,7 +1601,7 @@ Rcpp::List sbart(arma::mat x_train,
                         y_test_hat_post.col(curr) = prediction_test_sum;
                         all_tree_post.slice(curr) = tree_fits_store;
                         tau_post(curr) = data.tau;
-                        tau_b_post(curr) = data.tau_b;
+                        tau_b_post.row(curr) = data.tau_b;
                         tau_b_post_intercept(curr) = data.tau_b_intercept;
                         curr++;
                 }

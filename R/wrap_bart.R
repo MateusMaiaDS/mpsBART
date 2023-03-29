@@ -67,7 +67,7 @@ rbart <- function(x_train,
 
      # Getting the min and max for each column
      min_x <- apply(x_train_scale,2,min)
-     max_x <- apply(x_train, 2, max)
+     max_x <- apply(x_train_scale, 2, max)
      # Getting the internal knots
      knots <- apply(x_train_scale,
                     2,
@@ -77,22 +77,22 @@ rbart <- function(x_train,
      continuous_vars <- col_names[!(col_names %in% dummy_x$facVars)]
 
      B_train_arr <- array(data = NA,
-                          dim = c(ncol(x_train_scale[,continuous_vars, drop = FALSE]),
-                                  length(y),
-                                  nrow(knots)+1))
+                          dim = c(nrow(x_train_scale),
+                                  nrow(knots)+1, # +1 here because is a natural spline
+                                  ncol(x_train_scale[,continuous_vars, drop = FALSE])))
 
      B_test_arr <- array(data = NA,
-                          dim = c(ncol(x_test_scale[,continuous_vars, drop = FALSE]),
-                                  nrow(x_test_scale),
-                                  nrow(knots)+1))
+                          dim = c(nrow(x_test_scale),
+                                  nrow(knots)+1,  # +1 here because is a natural spline
+                                  ncol(x_test_scale[,continuous_vars, drop = FALSE])))
 
      # Creating the natural B-spline for each predictor
      for(i in 1:length(continuous_vars)){
-             B_train_obj <- splines::ns(x = x_train_scale[,continuous_vars[i], drop = FALSE],knots = knots[,continuous_vars[1]],
+             B_train_obj <- splines::ns(x = x_train_scale[,continuous_vars[i], drop = FALSE],knots = knots[,continuous_vars[i]],
                                         intercept = FALSE,
                                         Boundary.knots = c(min_x[i],max_x[i]))
-             B_train_arr[i,,] <- as.matrix(B_train_obj)
-             B_test_arr[i,,] <- as.matrix(predict(B_train_obj,newx = x_test_scale[,continuous_vars[i], drop = FALSE]))
+             B_train_arr[,,i] <- as.matrix(B_train_obj)
+             B_test_arr[,,i] <- as.matrix(predict(B_train_obj,newx = x_test_scale[,continuous_vars[i], drop = FALSE]))
      }
 
      # === Directly getting the Pnealised version over the basis function
@@ -110,13 +110,13 @@ rbart <- function(x_train,
                                          nrow(knots)+1-dif_order,
                                          ncol(x_test_scale[,continuous_vars, drop = FALSE])))# correcting the new dimension by P
 
-             D <- D_gen(p = ncol(B_train_arr[1,,]),n_dif = dif_order)
+             D <- D_gen(p = ncol(B_train_arr[,,1]),n_dif = dif_order)
 
              for(i in 1:length(continuous_vars)){
                      # IN CASE WE WANT TO USE THE DIFFERENCE PENALISATION DIRECTLY OVER THE
                      #BASIS FUNCTION
-                     Z_train_arr[i,,] <- B_train_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
-                     Z_test_arr[i,,] <- B_test_arr[i,,]%*%crossprod(D,solve(tcrossprod(D)))
+                     Z_train_arr[,,i] <- B_train_arr[,,i]%*%crossprod(D,solve(tcrossprod(D)))
+                     Z_test_arr[,,i] <- B_test_arr[,,i]%*%crossprod(D,solve(tcrossprod(D)))
              }
      }
 
@@ -158,29 +158,16 @@ rbart <- function(x_train,
 
 
      # Getting the number of basis
-     d_pred <- dim(B_train_arr)[1]
+     d_pred <- dim(B_train_arr)[3]
 
-     # Getting the \tau_b
-     naive_tau_b <- optim(par = rep(1, 2), fn = nll, dat=y_scale,
-                          x = x_train_scale,
-                          B = B_train,
-                          tau_b_0_ = tau_b_0,
-                          method = "L-BFGS-B",
-                          hessian = TRUE,
-                          lower = rep(0.0001, 2))$par[2]
-
-     d_tau_b <- optim(par = 1,d_tau_b_rate,method = "L-BFGS-B",
-                      lower = 0.001,df_tau_b = df_tau_b,
-                      prob_tau_b = prob_tau_b,
-                      naive_tau_b = naive_tau_b)$par
-
+     a_tau_b <- d_tau_b <- 10.0
 
      # Generating the BART obj
      bart_obj <- sbart(x_train_scale,
           y_scale,
           x_test_scale,
-          B_train = B_train,
-          B_test = B_test,
+          Z_train = Z_train_arr,
+          Z_test = Z_test_arr,
           n_tree,
           n_mcmc,
           n_burn,
