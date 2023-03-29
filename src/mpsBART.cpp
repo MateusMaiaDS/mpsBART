@@ -258,6 +258,8 @@ Node::Node(modelParam &data){
         log_likelihood = 0.0;
         depth = 0;
 
+
+        // Initialising all the parameters
         betas = arma::mat(data.p,data.d_var,arma::fill::zeros);
 
 
@@ -521,9 +523,12 @@ void grow(Node* tree, modelParam &data, arma::vec &curr_res){
 
         // Calculating the whole likelihood fo the tree
         for(int i = 0; i < t_nodes.size(); i++){
+                cout << "Error SplineNodeLogLike" << endl;
                 t_nodes[i]->splineNodeLogLike(data, curr_res);
                 tree_log_like = tree_log_like + t_nodes[i]->log_likelihood;
         }
+
+        cout << "LogLike Node ok Grow" << endl;
 
         // Adding the leaves
         g_node->addingLeaves(data);
@@ -1142,47 +1147,57 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         }
 
         // Creating the B spline
-        arma::cube leaf_x(n_leaf,data.d_var,data.x_train.n_cols,arma::fill::zeros);
-        arma::cube leaf_x_test(n_leaf_test,data.d_var,data.x_test.n_cols,arma::fill::zeros);
-        arma::vec leaf_res_(n_leaf);
+        arma::cube Z(n_leaf,data.p,data.d_var);
+        arma::cube Z_t(data.p,n_leaf,data.d_var);
 
-        // Need to iterate a d-level
-        for(int k = 0; k < data.d_var;k++){
-                for(int i = 0; i < n_leaf;i++){
-                        for(int j = 0 ; j < data.Z_train.n_cols; j++){
-                                leaf_x(i,j,k) = data.Z_train(train_index[i],j,k);
-                        }
-                        leaf_res_(i) = curr_res(train_index[i]);
-                }
-        }
-
-        for(int k = 0; k < data.d_var;k++){
-                for(int i = 0 ; i < n_leaf_test;i++){
-                        for(int j = 0 ; j < data.Z_test.n_cols; j++){
-                                leaf_x_test(i,j,k) = data.Z_test(test_index[i],j,k);
-                        }
-                }
-        }
-
+        arma::cube Z_test(n_leaf_test,data.p,data.d_var);
+        arma::mat z_t_ones(data.p,data.d_var);
+        leaf_res = arma::vec(n_leaf);
 
         // Some aux elements
         arma::mat ones_vec(n_leaf,1,arma::fill::ones);
-        leaf_res = leaf_res_; // Storing residuals
         arma::mat diag_aux(n_leaf,n_leaf,arma::fill::eye);
         arma::mat res_cov(n_leaf,n_leaf,arma::fill::zeros);
         s_tau_beta_0 = (n_leaf + data.tau_b_intercept/data.tau);
-        z_t_ones = arma::mat(n_leaf,data.d_var,arma::fill::zeros);
 
-        // Calculating B
-        for(int i = 0; i < data.d_var;i++){
-                Z.slice(i) = leaf_x;
-                Z_test.slice(i) = leaf_x_test;
-                Z_t.slice(i) = Z.slice(i).t();
-                z_t_ones.col(i) = Z_t.slice(i)*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
-                res_cov = res_cov + (1/data.tau_b(i))*Z.slice(i)*Z_t.slice(i);
+        cout << "Z dimensions are: " << Z.n_rows << " " << Z.n_cols << " "<< Z.n_slices << endl;
+        cout << "Z test dimensions are: " << Z_test.n_rows << " " << Z_test.n_cols << " "<< Z_test.n_slices << endl;
+
+
+        // Need to iterate a d-level
+        for(int k = 0; k < data.d_var;k++){
+                cout << "Error on Z_t" << endl;
+
+                // Train elements
+                for(int i = 0; i < n_leaf;i++){
+                        for(int j = 0 ; j < data.Z_train.n_cols; j++){
+                                Z(i,j,k) = data.Z_train(train_index[i],j,k);
+                        }
+                        leaf_res(i) = curr_res(train_index[i]);
+                }
+
+                cout << "Error on Z" << endl;
+                Z_t.slice(k) = Z.slice(k).t();
+                cout << "Error on Z_ones" << endl;
+
+                z_t_ones.col(k) = Z_t.slice(k)*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
+                cout << "Error on res_cov" << endl;
+
+                res_cov = res_cov + (1/data.tau_b(k))*Z.slice(k)*Z_t.slice(k);
+
+                // Test elements
+                for(int i = 0 ; i < n_leaf_test;i++){
+                        for(int j = 0 ; j < data.Z_test.n_cols; j++){
+                                Z_test(i,j,k) = data.Z_test(test_index[i],j,k);
+                        }
+                }
+
         }
 
-        // Redifining the matrix quantities
+
+        cout << " All good" << endl;
+
+        // Adding the remaining quantities
         res_cov  = ((1/data.tau)*diag_aux + (1/data.tau_b_intercept) + res_cov);
 
 
@@ -1458,6 +1473,9 @@ Rcpp::List sbart(arma::mat x_train,
 
         // Posterior counter
         int curr = 0;
+
+        cout << "Error ModelParam init" << endl;
+
         // Creating the structu object
         modelParam data(x_train,
                         y_train,
@@ -1482,6 +1500,8 @@ Rcpp::List sbart(arma::mat x_train,
                         p_sample,
                         p_sample_levels);
 
+        cout << "Error ModelParam ok" << endl;
+
         // Getting the n_post
         int n_post = n_mcmc - n_burn;
 
@@ -1490,7 +1510,7 @@ Rcpp::List sbart(arma::mat x_train,
         arma::mat y_test_hat_post = arma::zeros<arma::mat>(data.x_test.n_rows,n_post);
         arma::cube all_tree_post(y_train.size(),n_tree,n_post,arma::fill::zeros);
         arma::vec tau_post = arma::zeros<arma::vec>(n_post);
-        arma::mat tau_b_post = arma::zeros<arma::vec>(n_post,data.d_var);
+        arma::mat tau_b_post = arma::mat(n_post,data.d_var,arma::fill::zeros);
         arma::vec tau_b_post_intercept = arma::zeros<arma::vec>(n_post);
 
 
@@ -1553,20 +1573,20 @@ Rcpp::List sbart(arma::mat x_train,
 
                         // Selecting the verb
                         if(verb < 0.3){
-                                // cout << " Grow error" << endl;
+                                cout << " Grow error" << endl;
                                 grow(all_forest.trees[t],data,partial_residuals);
                         } else if(verb>=0.3 & verb <0.6) {
-                                // cout << " Prune error" << endl;
+                                cout << " Prune error" << endl;
                                 prune(all_forest.trees[t], data, partial_residuals);
                         } else {
-                                // cout << " Change error" << endl;
+                                cout << " Change error" << endl;
                                 change(all_forest.trees[t], data, partial_residuals);
                                 // std::cout << "Error after change" << endl;
                         }
 
 
                         // Updating the all the parameters
-                        // cout << "Error on Beta" << endl;
+                        cout << "Error on Beta" << endl;
                         updateBeta(all_forest.trees[t], data);
                         // cout << "Error on Gamma" << endl;
                         updateGamma(all_forest.trees[t],data);
