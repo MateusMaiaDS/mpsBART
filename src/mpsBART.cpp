@@ -161,8 +161,8 @@ arma::mat bspline(arma::vec x,
 modelParam::modelParam(arma::mat x_train_,
                        arma::vec y_,
                        arma::mat x_test_,
-                       arma::cube B_train_,
-                       arma::cube B_test_,
+                       arma::cube Z_train_,
+                       arma::cube Z_test_,
                        int n_tree_,
                        double alpha_,
                        double beta_,
@@ -184,21 +184,21 @@ modelParam::modelParam(arma::mat x_train_,
         x_train = x_train_;
         y = y_;
         x_test = x_test_;
-        B_train = B_train_;
-        B_test = B_test_;
+        Z_train = Z_train_;
+        Z_test = Z_test_;
         n_tree = n_tree_;
-        p = B_train_.n_cols;
-        d_pred = B_train_.n_slices;
+        p = Z_train_.n_cols;
+        d_var = Z_train_.n_slices;
         alpha = alpha_;
         beta = beta_;
         tau_mu = tau_mu_;
-        tau_b = tau_b_;
+        tau_b = arma::vec(Z_train_.n_slices,arma::fill::ones)*tau_b_;
         tau_b_intercept = tau_b_intercept_;
         tau = tau_;
         a_tau = a_tau_;
         d_tau = d_tau_;
         nu = nu_;
-        delta = delta_;
+        delta = arma::vec(Z_train_.n_slices,arma::fill::ones)*delta_;
         a_delta = a_delta_;
         d_delta = d_delta_;
         n_mcmc = n_mcmc_;
@@ -240,6 +240,7 @@ Node::Node(modelParam &data){
         r_sum = 0.0;
         log_likelihood = 0.0;
         depth = 0;
+
 
 }
 
@@ -1113,9 +1114,7 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
                 n_leaf = data.x_train.n_rows;
                 n_leaf_test = data.x_test.n_rows;
         }
-        // Updating the r_sum
-        // r_sum = 0;
-        // When we generate empty nodes we don't want to accept them;
+
         if(train_index[0]==-1){
         // if(n_leaf < 100){
                 r_sum = 0;
@@ -1126,48 +1125,55 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         }
 
         // Creating the B spline
-        arma::cube leaf_x(n_leaf,data.B_train.n_cols,data.x_train.n_cols,arma::fill::zeros);
-        arma::mat leaf_x_test(n_leaf_test,data.B_train.n_cols,data.x_train.n_cols,arma::fill::ones);
+        arma::cube leaf_x(n_leaf,data.d_var,data.x_train.n_cols,arma::fill::zeros);
+        arma::cube leaf_x_test(n_leaf_test,data.d_var,data.x_test.n_cols,arma::fill::zeros);
         arma::vec leaf_res_(n_leaf);
 
         // Need to iterate a d-level
-        for(int k = 0; k < data.x_train)
-        for(int i = 0; i < n_leaf;i++){
-                for(int j = 0 ; j < data.B_train.n_cols; j++){
-                        leaf_x(i,j) = data.B_train(train_index[i],j);
-                }
-                leaf_res_(i) = curr_res(train_index[i]);
-        }
-
-        for(int i = 0 ; i < n_leaf_test;i++){
-                for(int j = 0 ; j < data.B_test.n_cols; j++){
-                        leaf_x_test(i,j) = data.B_test(test_index[i],j);
+        for(int k = 0; k < data.d_var;k++){
+                for(int i = 0; i < n_leaf;i++){
+                        for(int j = 0 ; j < data.Z_train.n_cols; j++){
+                                leaf_x(i,j,k) = data.Z_train(train_index[i],j,k);
+                        }
+                        leaf_res_(i) = curr_res(train_index[i]);
                 }
         }
 
-        // cout << "Error 2.0 spline loglike " << n_leaf << endl;
+        for(int k = 0; k < data.d_var;k++){
+                for(int i = 0 ; i < n_leaf_test;i++){
+                        for(int j = 0 ; j < data.Z_test.n_cols; j++){
+                                leaf_x_test(i,j,k) = data.Z_test(test_index[i],j,k);
+                        }
+                }
+        }
+
+
+        // Some aux elements
+        arma::mat ones_vec(n_leaf,1,arma::fill::ones);
+        leaf_res = leaf_res_; // Storing residuals
+        arma::mat diag_aux(n_leaf,n_leaf,arma::fill::eye);
+        arma::mat res_cov(n_leaf,n_leaf,arma::fill::zeros);
+        s_tau_beta_0 = (n_leaf + data.tau_b_intercept/data.tau);
+        z_t_ones = arma::mat(n_leaf,data.d_var,arma::fill::zeros);
 
         // Calculating B
-        B = leaf_x;
-        B_test = leaf_x_test;
-        B_t = B.t();
-        s_tau_beta_0 = (n_leaf + data.tau_b_intercept/data.tau);
-        arma::mat ones_vec(n_leaf,1,arma::fill::ones);
-        b_t_ones = B_t*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
-        leaf_res = leaf_res_; // Storing residuals
-
+        for(int i = 0; i < data.d_var;i++){
+                Z.slice(i) = leaf_x;
+                Z_test.slice(i) = leaf_x_test;
+                Z_t.slice(i) = Z.t();
+                z_t_ones.col(i) = Z_t.slice(i)*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
+                res_cov = res_cov + (1/data.tau_b(i))*Z.slice(i)*Z_t.slice(i);
+        }
 
         // Redifining the matrix quantities
-        arma::mat diag_aux(n_leaf,n_leaf,arma::fill::eye);
-        arma::mat res_cov  = ((1/data.tau)*diag_aux + (1/data.tau_b_intercept) + (1/data.tau_b)*B*B_t);
-        // arma::mat res_cov  = ((1/data.tau)*diag_aux  );
+        res_cov  = ((1/data.tau)*diag_aux + (1/data.tau_b_intercept) + res_cov);
 
 
         // If is smaller then the node size still need to update theq quantities;
-        // if(n_leaf < 15){
-        //         log_likelihood = -2000000; // Absurd value avoid this case
-        //         return;
-        // }
+        if(n_leaf < 15){
+                log_likelihood = -2000000; // Absurd value avoid this case
+                return;
+        }
 
         // Getting the log-likelihood;
         log_likelihood = log_dmvn(leaf_res,res_cov);

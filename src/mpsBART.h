@@ -15,17 +15,17 @@ struct modelParam {
         // BART prior param specification
         int n_tree;
         int p; // Dimension of basis matrix
-        int d_pred;
+        int d_var;
         double alpha;
         double beta;
         double tau_mu;
-        double tau_b;
+        arma::vec tau_b;
         double tau_b_intercept;
         double tau;
         double a_tau;
         double d_tau;
         double nu;
-        double delta;
+        arma::vec delta;
         double a_delta;
         double d_delta;
         arma::vec p_sample;
@@ -41,8 +41,8 @@ struct modelParam {
         modelParam(arma::mat x_train_,
                    arma::vec y_,
                    arma::mat x_test_,
-                   arma::cube B_train_,
-                   arma::cube B_test_,
+                   arma::cube Z_train_,
+                   arma::cube Z_test_,
                    int n_tree_,
                    double alpha_,
                    double beta_,
@@ -96,7 +96,7 @@ struct Node {
 
      // Leaf parameters
      double mu;
-     arma::vec betas;
+     arma::mat betas;
 
      // Storing sufficient statistics over the nodes
      double r_sq_sum = 0;
@@ -107,10 +107,10 @@ struct Node {
      double s_tau_beta_0 = 0.0;
      double beta_zero = 0.0;
      // Storing  splines quantities
-     arma::mat B;
-     arma::mat B_t;
-     arma::mat B_test;
-     arma::mat b_t_ones;
+     arma::cube Z;
+     arma::cube Z_t;
+     arma::cube Z_test;
+     arma::mat z_t_ones;
      arma::vec leaf_res;
 
      // Displaying and check nodes
