@@ -28,7 +28,7 @@ library(splines) # Useful for creating the B-spline basis functions
 
 # Some R code to simulate data from the above model
 set.seed(42)
-n_ <- 200 # Number of observations
+n_ <- 50 # Number of observations
 # Simulation 1
 fried_sim <- mlbench::mlbench.friedman1(n = n_,sd = 0.01)
 x <- fried_sim$x[,1:5,drop = FALSE]

@@ -5,7 +5,7 @@ Rcpp::sourceCpp("src/mpsBART.cpp")
 source("R/other_functions.R")
 source("R/wrap_bart.R")
 source("R/bayesian_simulation.R")
-n_ <- 500
+n_ <- 50
 set.seed(42)
 
 # Simulation 1
@@ -22,7 +22,7 @@ x_test <- as.data.frame(x_new)
 # Testing the mpsBART
 bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x_test,
                    n_tree = 1,n_mcmc = 2500,alpha = 0.95,dif_order = 0,
-                   beta = 2,nIknots = 30,delta = 1,
+                   beta = 2,nIknots = 100,delta = 1,
                    n_burn = 500,scale_bool = TRUE)
 
 

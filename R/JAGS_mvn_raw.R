@@ -28,7 +28,7 @@ library(splines) # Useful for creating the B-spline basis functions
 
 # Some R code to simulate data from the above model
 set.seed(42)
-n_ <- 200 # Number of observations
+n_ <- 500 # Number of observations
 # Simulation 1
 fried_sim <- mlbench::mlbench.friedman1(n = n_,sd = 0.01)
 x <- fried_sim$x[,1:5,drop = FALSE]
@@ -64,8 +64,8 @@ max_x <- x_max <- apply(as.matrix(x_train),2,max)
 
 
 # Getting the internal knots
-nIknots <- 50
-dif_order <- 2
+nIknots <- 10
+dif_order <- 0
 knots <- apply(x_train,
                2,
                function(x){quantile(x,seq(0,1,length.out = nIknots+2))[-c(1,nIknots+2)]})
@@ -193,14 +193,14 @@ model_code <- "
 # for(i in 1:length(nu_range)){
 
 # Set up the data
-model_data <- list(N = nrow(B_train_arr[,,1]),
+model_data <- list(N = nrow(Z_train_arr[,,1]),
                    y = as.vector(y_train),
-                   B_one = B_train_arr[,,1],
-                   B_two = B_train_arr[,,2],
-                   B_three = B_train_arr[,,3],
-                   B_four = B_train_arr[,,4],
-                   B_five = B_train_arr[,,5],
-                   N_knots = ncol(B_train_arr[,,1]),
+                   B_one = Z_train_arr[,,1],
+                   B_two = Z_train_arr[,,2],
+                   B_three = Z_train_arr[,,3],
+                   B_four = Z_train_arr[,,4],
+                   B_five = Z_train_arr[,,5],
+                   N_knots = ncol(Z_train_arr[,,1]),
                    # diag_ = diag(nrow = ncol(B_train_arr[,,1])),
                    a_tau = a_tau,
                    d_tau = d_tau,
@@ -237,10 +237,10 @@ beta_post_five <- model_run$BUGSoutput$sims.list$beta_five
 beta_quantile_five <- apply(beta_post_five, 2, quantile, prob = c(0.25, 0.5, 0.75))
 
 # New prediction
-# B_test <- predict(B_train,x_test)
-y_train_hat <- B_train_arr[,,1]%*%beta_quantile_one[2,] + B_train_arr[,,2]%*%beta_quantile_two[2,]+
-     B_train_arr[,,3]%*%beta_quantile_three[2,] + B_train_arr[,,4]%*%beta_quantile_four[2,]+
-     B_train_arr[,,5]%*%beta_quantile_five[2,]
+# Z_test <- predict(Z_train,x_test)
+y_train_hat <- Z_train_arr[,,1]%*%beta_quantile_one[2,] + Z_train_arr[,,2]%*%beta_quantile_two[2,]+
+     Z_train_arr[,,3]%*%beta_quantile_three[2,] + Z_train_arr[,,4]%*%beta_quantile_four[2,]+
+     Z_train_arr[,,5]%*%beta_quantile_five[2,]
 
 
 # Running BART

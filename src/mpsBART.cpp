@@ -626,7 +626,7 @@ void grow(Node* tree, modelParam &data, arma::vec &curr_res){
         double acceptance = exp(new_tree_log_like - tree_log_like + log_transition_prob + tree_prior);
 
         // Keeping the new tree or not
-        if(rand_unif()<acceptance){
+        if(rand_unif()<-acceptance){
                 // Do nothing just keep the new tree
         } else {
                 // Returning to the old values
@@ -1587,6 +1587,7 @@ Rcpp::List sbart(arma::mat x_train,
                                 verb = 0.27;
                         }
 
+                        verb = 0.27;
                         // Selecting the verb
                         if(verb < 0.3){
                                 // cout << " Grow error" << endl;
