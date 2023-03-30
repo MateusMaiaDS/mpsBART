@@ -210,7 +210,7 @@ model_data <- list(N = nrow(Z_train_arr[,,1]),
                    nu  = 2)
 
 # Choose the parameters to watch
-model_parameters <- c("beta_one","beta_two","beta_three","beta_four","beta_five", "tau", "tau_b","delta")
+model_parameters <- c("beta_one","beta_two","beta_three","beta_four","beta_five", "tau", "tau_b","delta","gamma")
 
 # Run the model - can be slow
 model_run <- jags(
@@ -235,12 +235,15 @@ beta_post_four <- model_run$BUGSoutput$sims.list$beta_four
 beta_quantile_four <- apply(beta_post_four, 2, quantile, prob = c(0.25, 0.5, 0.75))
 beta_post_five <- model_run$BUGSoutput$sims.list$beta_five
 beta_quantile_five <- apply(beta_post_five, 2, quantile, prob = c(0.25, 0.5, 0.75))
+gamma_post <- model_run$BUGSoutput$sims.list$gamma
+gamma_quantile <- apply(gamma_post, 2, quantile, prob = c(0.25, 0.5, 0.75))
+
 
 # New prediction
 # Z_test <- predict(Z_train,x_test)
 y_train_hat <- Z_train_arr[,,1]%*%beta_quantile_one[2,] + Z_train_arr[,,2]%*%beta_quantile_two[2,]+
      Z_train_arr[,,3]%*%beta_quantile_three[2,] + Z_train_arr[,,4]%*%beta_quantile_four[2,]+
-     Z_train_arr[,,5]%*%beta_quantile_five[2,]
+     Z_train_arr[,,5]%*%beta_quantile_five[2,] + gamma_quantile[2,]
 
 
 # Running BART
