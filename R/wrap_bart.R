@@ -68,6 +68,7 @@ rbart <- function(x_train,
      # Getting the min and max for each column
      min_x <- apply(x_train_scale,2,min)
      max_x <- apply(x_train_scale, 2, max)
+
      # Getting the internal knots
      knots <- apply(x_train_scale,
                     2,
