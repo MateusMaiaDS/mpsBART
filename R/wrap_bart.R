@@ -118,6 +118,11 @@ rbart <- function(x_train,
                      Z_train_arr[,,i] <- B_train_arr[,,i]%*%crossprod(D,solve(tcrossprod(D)))
                      Z_test_arr[,,i] <- B_test_arr[,,i]%*%crossprod(D,solve(tcrossprod(D)))
              }
+     } else {
+
+             # Using original values for B
+             Z_train_arr <- B_train_arr
+             Z_test_arr <- B_test_arr
      }
 
      # Scaling "y"

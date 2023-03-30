@@ -523,12 +523,12 @@ void grow(Node* tree, modelParam &data, arma::vec &curr_res){
 
         // Calculating the whole likelihood fo the tree
         for(int i = 0; i < t_nodes.size(); i++){
-                cout << "Error SplineNodeLogLike" << endl;
+                // cout << "Error SplineNodeLogLike" << endl;
                 t_nodes[i]->splineNodeLogLike(data, curr_res);
                 tree_log_like = tree_log_like + t_nodes[i]->log_likelihood;
         }
 
-        cout << "LogLike Node ok Grow" << endl;
+        // cout << "LogLike Node ok Grow" << endl;
 
         // Adding the leaves
         g_node->addingLeaves(data);
@@ -1137,6 +1137,8 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
                 n_leaf_test = data.x_test.n_rows;
         }
 
+
+        // Case of an empty node
         if(train_index[0]==-1){
         // if(n_leaf < 100){
                 r_sum = 0;
@@ -1147,12 +1149,12 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         }
 
         // Creating the B spline
-        arma::cube Z(n_leaf,data.p,data.d_var);
-        arma::cube Z_t(data.p,n_leaf,data.d_var);
+        arma::cube Z_(n_leaf,data.p,data.d_var);
+        arma::cube Z_t_(data.p,n_leaf,data.d_var);
 
-        arma::cube Z_test(n_leaf_test,data.p,data.d_var);
-        arma::mat z_t_ones(data.p,data.d_var);
-        leaf_res = arma::vec(n_leaf);
+        arma::cube Z_test_(n_leaf_test,data.p,data.d_var);
+        arma::mat z_t_ones_(data.p,data.d_var);
+        arma::vec leaf_res_ = arma::vec(n_leaf);
 
         // Some aux elements
         arma::mat ones_vec(n_leaf,1,arma::fill::ones);
@@ -1160,42 +1162,47 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         arma::mat res_cov(n_leaf,n_leaf,arma::fill::zeros);
         s_tau_beta_0 = (n_leaf + data.tau_b_intercept/data.tau);
 
-        cout << "Z dimensions are: " << Z.n_rows << " " << Z.n_cols << " "<< Z.n_slices << endl;
-        cout << "Z test dimensions are: " << Z_test.n_rows << " " << Z_test.n_cols << " "<< Z_test.n_slices << endl;
+        // cout << "Z dimensions are: " << Z.n_rows << " " << Z.n_cols << " "<< Z.n_slices << endl;
+        // cout << "Z test dimensions are: " << Z_test.n_rows << " " << Z_test.n_cols << " "<< Z_test.n_slices << endl;
 
 
         // Need to iterate a d-level
         for(int k = 0; k < data.d_var;k++){
-                cout << "Error on Z_t" << endl;
+                // cout << "Error on Z_t" << endl;
 
                 // Train elements
                 for(int i = 0; i < n_leaf;i++){
                         for(int j = 0 ; j < data.Z_train.n_cols; j++){
-                                Z(i,j,k) = data.Z_train(train_index[i],j,k);
+                                Z_(i,j,k) = data.Z_train(train_index[i],j,k);
                         }
-                        leaf_res(i) = curr_res(train_index[i]);
+                        leaf_res_(i) = curr_res(train_index[i]);
                 }
 
-                cout << "Error on Z" << endl;
-                Z_t.slice(k) = Z.slice(k).t();
-                cout << "Error on Z_ones" << endl;
+                // cout << "Error on Z" << endl;
+                Z_t_.slice(k) = Z_.slice(k).t();
+                // cout << "Error on Z_ones" << endl;
 
-                z_t_ones.col(k) = Z_t.slice(k)*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
-                cout << "Error on res_cov" << endl;
+                z_t_ones_.col(k) = Z_t_.slice(k)*ones_vec; // Col-sums from B - gonna use this again to sample beta_0 (remember is a row vector)
+                // cout << "Error on res_cov" << endl;
 
-                res_cov = res_cov + (1/data.tau_b(k))*Z.slice(k)*Z_t.slice(k);
+                res_cov = res_cov + (1/data.tau_b(k))*Z_.slice(k)*Z_t_.slice(k);
 
                 // Test elements
                 for(int i = 0 ; i < n_leaf_test;i++){
                         for(int j = 0 ; j < data.Z_test.n_cols; j++){
-                                Z_test(i,j,k) = data.Z_test(test_index[i],j,k);
+                                Z_test_(i,j,k) = data.Z_test(test_index[i],j,k);
                         }
                 }
 
         }
 
 
-        cout << " All good" << endl;
+        // Sotring the new quantities for the node
+        Z = Z_;
+        Z_t = Z_t_;
+        z_t_ones = z_t_ones_;
+        Z_test = Z_test_;
+        leaf_res = leaf_res_;
 
         // Adding the remaining quantities
         res_cov  = ((1/data.tau)*diag_aux + (1/data.tau_b_intercept) + res_cov);
@@ -1231,15 +1238,20 @@ void updateBeta(Node* tree, modelParam &data){
                 }
 
                 // Calculating a cube with all {Z^(j)}\beta
-                arma::mat Z_j_beta(t_nodes[i]->n_leaf,data.d_var,arma::fill::ones);
+                // cout << "error in Z_j_beta" << endl;
+                arma::mat Z_j_beta(t_nodes[i]->n_leaf,data.d_var);
+                // cout << "Dimensions of Z are: " << t_nodes[i]->Z.n_rows << " " <<  t_nodes[i]->Z.n_cols << " " <<  t_nodes[i]->Z.n_slices << endl;
                 for(int k = 0; k<data.d_var;k++){
                         Z_j_beta.col(k) = t_nodes[i]->Z.slice(k)*t_nodes[i]->betas.col(k);
                 }
+
+                // cout << "error in Beta sampling" << endl;
+
                 // Iterating ove each predictor
                 for(int j=0;j<data.d_var;j++){
                         // Calculating elements exclusive to each predictor
                         arma::mat aux_precision_inv = arma::inv_sympd(t_nodes[i]->Z_t.slice(j)*t_nodes[i]->Z.slice(j)+(data.tau_b(j)/data.tau)*aux_diag);
-                        arma::mat beta_mean = aux_precision_inv*(t_nodes[i]->Z_t.slice(j)*t_nodes[i]->leaf_res-t_nodes[i]->Z_t.slice(i)*(t_nodes[i]->beta_zero+sum_exclude_col(Z_j_beta,j)));
+                        arma::mat beta_mean = aux_precision_inv*(t_nodes[i]->Z_t.slice(j)*t_nodes[i]->leaf_res-t_nodes[i]->Z_t.slice(j)*(t_nodes[i]->beta_zero+sum_exclude_col(Z_j_beta,j)));
                         arma::mat beta_cov = (1/data.tau)*aux_precision_inv;
 
                         // cout << "Error sample BETA" << endl;
@@ -1269,8 +1281,10 @@ void updateGamma(Node* tree, modelParam &data){
                 double s_gamma = t_nodes[i]->n_leaf+(data.tau_b_intercept/data.tau);
                 double sum_beta_z_one = 0;
 
+
+
                 for(int j = 0; j<data.d_var;j++){
-                        sum_beta_z_one = sum_beta_z_one + arma::as_scalar(t_nodes[i]->betas.col(j)*(t_nodes[i]->z_t_ones.col(j)));
+                        sum_beta_z_one = sum_beta_z_one + arma::as_scalar(t_nodes[i]->betas.col(j).t()*(t_nodes[i]->z_t_ones.col(j)));
                 }
 
                 // cout << "Beta_zero_mean " << endl;
@@ -1300,6 +1314,8 @@ void getPredictions(Node* tree,
 
                 // Calculating the sum over multiple predictors
                 arma::vec betas_b_sum(t_nodes[i]->n_leaf,arma::fill::zeros);
+                // cout << "Dimensions of Z are " << t_nodes[i] -> Z.n_rows << " " << t_nodes[i]->Z.n_cols << " " << t_nodes[i]->Z.n_slices << endl;
+
                 for(int j = 0;j<data.d_var;j++){
                         betas_b_sum = betas_b_sum + t_nodes[i]->Z.slice(j)*t_nodes[i]->betas.col(j);
                 }
@@ -1329,6 +1345,7 @@ void getPredictions(Node* tree,
 
                 // Calculating the sum over multiple predictors
                 arma::vec betas_b_sum_test(t_nodes[i]->Z_test.n_rows,arma::fill::zeros);
+
                 for(int j = 0;j<data.d_var;j++){
                         betas_b_sum_test = betas_b_sum + t_nodes[i]->Z_test.slice(j)*t_nodes[i]->betas.col(j);
                 }
@@ -1366,8 +1383,7 @@ void updateTau(arma::vec &y_hat,
 
 // Updating tau b parameter
 void updateTauB(Forest all_trees,
-                modelParam &data,
-                double a_tau_b_, double d_tau_b_){
+                modelParam &data){
 
 
         arma::vec beta_count_total(data.d_var,arma::fill::zeros);
@@ -1391,7 +1407,7 @@ void updateTauB(Forest all_trees,
 
                         for(int j = 0; j < data.d_var;j++){
                                 beta_sq_sum_total(j) = beta_sq_sum_total(j) + arma::accu(arma::square(t_nodes[i]->betas.col(j)));
-                                beta_count_total(j) = beta_count_total(j) + t_nodes[i]->betas.n_cols;
+                                beta_count_total(j) = beta_count_total(j) + data.p;
                         }
                 }
 
@@ -1474,7 +1490,7 @@ Rcpp::List sbart(arma::mat x_train,
         // Posterior counter
         int curr = 0;
 
-        cout << "Error ModelParam init" << endl;
+        // cout << "Error ModelParam init" << endl;
 
         // Creating the structu object
         modelParam data(x_train,
@@ -1500,7 +1516,7 @@ Rcpp::List sbart(arma::mat x_train,
                         p_sample,
                         p_sample_levels);
 
-        cout << "Error ModelParam ok" << endl;
+        // cout << "Error ModelParam ok" << endl;
 
         // Getting the n_post
         int n_post = n_mcmc - n_burn;
@@ -1510,7 +1526,7 @@ Rcpp::List sbart(arma::mat x_train,
         arma::mat y_test_hat_post = arma::zeros<arma::mat>(data.x_test.n_rows,n_post);
         arma::cube all_tree_post(y_train.size(),n_tree,n_post,arma::fill::zeros);
         arma::vec tau_post = arma::zeros<arma::vec>(n_post);
-        arma::mat tau_b_post = arma::mat(n_post,data.d_var,arma::fill::zeros);
+        arma::mat tau_b_post = arma::mat(data.d_var,n_post);
         arma::vec tau_b_post_intercept = arma::zeros<arma::vec>(n_post);
 
 
@@ -1573,24 +1589,25 @@ Rcpp::List sbart(arma::mat x_train,
 
                         // Selecting the verb
                         if(verb < 0.3){
-                                cout << " Grow error" << endl;
+                                // cout << " Grow error" << endl;
                                 grow(all_forest.trees[t],data,partial_residuals);
                         } else if(verb>=0.3 & verb <0.6) {
-                                cout << " Prune error" << endl;
+                                // cout << " Prune error" << endl;
                                 prune(all_forest.trees[t], data, partial_residuals);
                         } else {
-                                cout << " Change error" << endl;
+                                // cout << " Change error" << endl;
                                 change(all_forest.trees[t], data, partial_residuals);
                                 // std::cout << "Error after change" << endl;
                         }
 
 
                         // Updating the all the parameters
-                        cout << "Error on Beta" << endl;
+                        // cout << "Error on Beta" << endl;
                         updateBeta(all_forest.trees[t], data);
                         // cout << "Error on Gamma" << endl;
                         updateGamma(all_forest.trees[t],data);
                         // Getting predictions
+                        // cout << " Error on Get Predictions" << endl;
                         getPredictions(all_forest.trees[t],data,prediction_train,prediction_test);
 
 
@@ -1609,19 +1626,19 @@ Rcpp::List sbart(arma::mat x_train,
 
                 // Updating the Tau
                 // std::cout << "Error TauB: " << data.tau_b << endl;
-                updateTauB(all_forest,data,a_tau_b,d_tau_b);
+                // updateTauB(all_forest,data);
                 // std::cout << "Error Delta: " << data.delta << endl;
                 updateDelta(data);
                 // std::cout << "Error Tau: " << data.tau<< endl;
                 updateTau(partial_pred, data);
-
+                // std::cout << " All good " << endl;
                 if(i >= n_burn){
                         // Storing the predictions
                         y_train_hat_post.col(curr) = prediction_train_sum;
                         y_test_hat_post.col(curr) = prediction_test_sum;
                         all_tree_post.slice(curr) = tree_fits_store;
                         tau_post(curr) = data.tau;
-                        tau_b_post.row(curr) = data.tau_b;
+                        tau_b_post.col(curr) = data.tau_b;
                         tau_b_post_intercept(curr) = data.tau_b_intercept;
                         curr++;
                 }
