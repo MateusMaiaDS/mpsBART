@@ -29,33 +29,49 @@ library(splines) # Useful for creating the B-spline basis functions
 # Some R code to simulate data from the above model
 set.seed(42)
 n_ <- 100 # Number of observations
+
+# Simulation 2
+
+no_interaction_friedman <- function (n, sd = 1)
+{
+     x <- matrix(runif(4 * n), ncol = 4)
+     y <- 10 * sin(pi * x[, 1] )
+     y <- y + 20 * (x[, 2] - 0.5)^2 + 10 * x[, 3] + 5 * x[, 4]
+     if (sd > 0) {
+          y <- y + rnorm(n, sd = sd)
+     }
+     list(x = x, y = y)
+}
+
 # Simulation 1
-fried_sim <- mlbench::mlbench.friedman1(n = n_,sd = 0.1)
-x <- fried_sim$x[,1:5,drop = FALSE]
+sd_ <- 0.1
+fried_sim <- no_interaction_friedman(n = n_,sd = sd_)
+x <- fried_sim$x
 x_new <- x
 y <- fried_sim$y
 
+# Generating new samples
+new_sample <- no_interaction_friedman(n = 500,sd = sd_)
+x_test <- new_sample$x
 
 # Transforming into data.frame
 x <- as.data.frame(x)
-x_test <- as.data.frame(x_new)
-
+x_test <- as.data.frame(x_test)
 
 x_train <- x
 y_train <- y
-x_test <- x
 y_test <- y
 
 continuous_vars <- colnames(x_train)
 
 B_train_arr <- array(data = NA,
                      dim = c(nrow(x_train),
-                             nrow(knots)+1, # +1 here because is a natural spline
+                             nrow(knots)+3, # +1 here because is a natural spline
                              ncol(x_train[,continuous_vars, drop = FALSE])))
 
 B_test_arr <- array(data = NA,
                     dim = c(nrow(x_test),
-                            nrow(knots)+1,  # +1 here because is a natural spline
+                            nrow(knots)+3,  # +1 here because is a natural spline
                             ncol(x_test[,continuous_vars, drop = FALSE])))
 
 
@@ -65,8 +81,8 @@ max_x <- x_max <- apply(as.matrix(x_train),2,max)
 
 
 # Getting the internal knots
-nIknots <- 20
-dif_order <- 2
+nIknots <- 10
+dif_order <- 0
 knots <- apply(x_train,
                2,
                function(x){quantile(x,seq(0,1,length.out = nIknots+2))[-c(1,nIknots+2)]})
@@ -75,28 +91,28 @@ knots <- apply(x_train,
 
 B_train_arr <- array(data = NA,
                      dim = c(nrow(x_train),
-                             nrow(knots)+1, # +1 here because is a natural spline
+                             nrow(knots)+3, # +1 here because is a natural spline
                              ncol(x_train[,continuous_vars, drop = FALSE])))
 
 B_test_arr <- array(data = NA,
                     dim = c(nrow(x_test),
-                            nrow(knots)+1,  # +1 here because is a natural spline
+                            nrow(knots)+3,  # +1 here because is a natural spline
                             ncol(x_test[,continuous_vars, drop = FALSE])))
 
 Z_train_arr <- array(data = NA,
                      dim = c(nrow(x_train),
-                             nrow(knots)+1-dif_order,
+                             nrow(knots)+3-dif_order,
                              ncol(x_train[,continuous_vars, drop = FALSE]))) # correcting the new dimension by P
 
 Z_test_arr <- array(data = NA,
                     dim = c(nrow(x_test),
-                            nrow(knots)+1-dif_order,
+                            nrow(knots)+3-dif_order,
                             ncol(x_test[,continuous_vars, drop = FALSE])))# correcting the new dimension by P
 
 
 # Creating the natural B-spline for each predictor
 for(i in 1:length(continuous_vars)){
-     B_train_obj <- splines::ns(x = x_train[,continuous_vars[i]],knots = knots[,continuous_vars[i]],
+     B_train_obj <- splines::bs(x = x_train[,continuous_vars[i]],knots = knots[,continuous_vars[i]],
                                 intercept = FALSE,
                                 Boundary.knots = c(min_x[i],max_x[i]))
      B_train_arr[,,i] <- as.matrix(B_train_obj)
@@ -110,12 +126,12 @@ if(dif_order!=0){
 
      Z_train_arr <- array(data = NA,
                           dim = c(nrow(x_train),
-                                  nrow(knots)+1-dif_order,
+                                  nrow(knots)+3-dif_order,
                                   ncol(x_train[,continuous_vars, drop = FALSE]))) # correcting the new dimension by P
 
      Z_test_arr <- array(data = NA,
                          dim = c(nrow(x_test),
-                                 nrow(knots)+1-dif_order,
+                                 nrow(knots)+3-dif_order,
                                  ncol(x_test[,continuous_vars, drop = FALSE])))# correcting the new dimension by P
 
      D <- D_gen(p = ncol(B_train_arr[,,1]),n_dif = dif_order)
@@ -159,7 +175,7 @@ model_code <- "
 
    for (t in 1:N) {
 
-     mean_y[t] = inprod(B_one[t,1:N_knots],beta_one[1:N_knots]) + inprod(B_two[t,1:N_knots],beta_two[1:N_knots]) + inprod(B_three[t,1:N_knots],beta_three[1:N_knots]) + inprod(B_four[t,1:N_knots],beta_four[1:N_knots]) + inprod(B_five[t,1:N_knots],beta_five[1:N_knots])
+     mean_y[t] = inprod(B_one[t,1:N_knots],beta_one[1:N_knots]) + inprod(B_two[t,1:N_knots],beta_two[1:N_knots]) + inprod(B_three[t,1:N_knots],beta_three[1:N_knots]) + inprod(B_four[t,1:N_knots],beta_four[1:N_knots]) #+ inprod(B_five[t,1:N_knots],beta_five[1:N_knots])
 
      y[t] ~ dnorm(sum(mean_y[t]) + gamma, tau)
    }
@@ -174,7 +190,7 @@ model_code <- "
                beta_two[i] ~ dnorm(0,tau_b)
                beta_three[i] ~ dnorm(0,tau_b)
                beta_four[i] ~ dnorm(0,tau_b)
-               beta_five[i] ~ dnorm(0,tau_b)
+               # beta_five[i] ~ dnorm(0,tau_b[5])
     }
 
     # Priors on beta values
@@ -185,7 +201,6 @@ model_code <- "
   }
   "
 
-# for(i in 1:length(nu_range)){
 
 # Set up the data
 model_data <- list(N = nrow(Z_train_arr[,,1]),
@@ -194,7 +209,7 @@ model_data <- list(N = nrow(Z_train_arr[,,1]),
                    B_two = Z_train_arr[,,2],
                    B_three = Z_train_arr[,,3],
                    B_four = Z_train_arr[,,4],
-                   B_five = Z_train_arr[,,5],
+                   # B_five = Z_train_arr[,,5],
                    N_knots = ncol(Z_train_arr[,,1]),
                    # diag_ = diag(nrow = ncol(B_train_arr[,,1])),
                    a_tau = a_tau,
@@ -205,7 +220,7 @@ model_data <- list(N = nrow(Z_train_arr[,,1]),
                    nu  = 2)
 
 # Choose the parameters to watch
-model_parameters <- c("beta_one","beta_two","beta_three","beta_four","beta_five", "tau", "tau_b","delta","gamma")
+model_parameters <- c("beta_one","beta_two","beta_three","beta_four", "tau", "tau_b","delta","gamma")
 
 # Run the model - can be slow
 model_run <- jags(
@@ -228,8 +243,8 @@ beta_post_three <- model_run$BUGSoutput$sims.list$beta_three
 beta_quantile_three <- apply(beta_post_three, 2, quantile, prob = c(0.25, 0.5, 0.75))
 beta_post_four <- model_run$BUGSoutput$sims.list$beta_four
 beta_quantile_four <- apply(beta_post_four, 2, quantile, prob = c(0.25, 0.5, 0.75))
-beta_post_five <- model_run$BUGSoutput$sims.list$beta_five
-beta_quantile_five <- apply(beta_post_five, 2, quantile, prob = c(0.25, 0.5, 0.75))
+# beta_post_five <- model_run$BUGSoutput$sims.list$beta_five
+# beta_quantile_five <- apply(beta_post_five, 2, quantile, prob = c(0.25, 0.5, 0.75))
 gamma_post <- model_run$BUGSoutput$sims.list$gamma
 gamma_quantile <- apply(gamma_post, 2, quantile, prob = c(0.25, 0.5, 0.75))
 
@@ -238,11 +253,13 @@ gamma_quantile <- apply(gamma_post, 2, quantile, prob = c(0.25, 0.5, 0.75))
 # Z_test <- predict(Z_train,x_test)
 y_train_hat <- Z_train_arr[,,1]%*%beta_quantile_one[2,] + Z_train_arr[,,2]%*%beta_quantile_two[2,]+
      Z_train_arr[,,3]%*%beta_quantile_three[2,] + Z_train_arr[,,4]%*%beta_quantile_four[2,]+
-     Z_train_arr[,,5]%*%beta_quantile_five[2,] + gamma_quantile[2,]
+     # Z_train_arr[,,5]%*%beta_quantile_five[2,] +
+     gamma_quantile[2,]
 
 
 # Running BART
-bartmod <- dbarts::bart(x.train = x_train,y.train = unlist(c(y_train)),ntree = 200,x.test = x_test)
+bartmod <- dbarts::bart(x.train = x_train,y.train = unlist(c(y_train)),ntree = 200,x.test = x_test,
+                        keeptrees = TRUE)
 
 # Convergence plots
 par(mfrow = c(1,2))
@@ -252,5 +269,21 @@ plot(bartmod$sigma^-2, type = "l", main = paste0("BART: ",expression(tau)),ylab=
 par(mfrow = c(1,2))
 plot(y_train_hat,y, main = 'mpsBART', xlab = "mpsBART pred", ylab = "y")
 plot(bartmod$yhat.train.mean,y, main = "BART", xlab = "BART pred", ylab = "y")
+
+
+
+# Calculations in the splines model
+y_test_hat <- Z_test_arr[,,1]%*%beta_quantile_one[2,] + Z_test_arr[,,2]%*%beta_quantile_two[2,]+
+  Z_test_arr[,,3]%*%beta_quantile_three[2,] + Z_test_arr[,,4]%*%beta_quantile_four[2,]+
+  # Z_test_arr[,,5]%*%beta_quantile_five[2,] +
+  gamma_quantile[2,]
+
+y_bart_hat <- colMeans(predict(bartmod,new_sample$x))
+
+rmse(x = y_test_hat,y = new_sample$y)
+rmse(x = y_bart_hat,y = new_sample$y)
+
+plot(x = y_test_hat,y = new_sample$y)
+plot(x = y_bart_hat,y = new_sample$y)
 
 
