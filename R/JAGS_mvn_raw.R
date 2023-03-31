@@ -28,9 +28,9 @@ library(splines) # Useful for creating the B-spline basis functions
 
 # Some R code to simulate data from the above model
 set.seed(42)
-n_ <- 500 # Number of observations
+n_ <- 1000 # Number of observations
 # Simulation 1
-fried_sim <- mlbench::mlbench.friedman1(n = n_,sd = 0.01)
+fried_sim <- mlbench::mlbench.friedman1(n = n_,sd = 1)
 x <- fried_sim$x[,1:5,drop = FALSE]
 x_new <- x
 y <- fried_sim$y
@@ -132,20 +132,16 @@ if(dif_order!=0){
      Z_test_arr <- B_test_arr
 }
 
-# Scaling y
-min_y <- min(y_train)
-max_y <- max(y_train)
-
-y_scale <- normalize_bart(y = y_train,a = min_y,b = max_y)
 
 # Setting other parameters
-nsigma <- naive_sigma(x = x_train,y = y_scale)
+nsigma <- naive_sigma(x = x_train,y = y_train)
 df <- 3
 # Calculating tau hyperparam
 a_tau <- df/2
 sigquant <- 0.9
 
-tau_b_0 <- 4*(2^2)*1
+tau_b_0 <- 4*(2^2)*1/(diff(range(y_train))^2)
+
 # Calculating lambda
 qchi <- stats::qchisq(p = 1-sigquant,df = df,lower.tail = 1,ncp = 0)
 lambda <- (nsigma*nsigma*qchi)/df
@@ -182,10 +178,8 @@ model_code <- "
 
     # Priors on beta values
     tau ~ dgamma(a_tau, d_tau)
-    # for(i in 1:5){
-         tau_b ~ dgamma(0.5 * nu, 0.5 * delta * nu)
-         delta ~ dgamma(a_delta, d_delta)
-    # }
+    tau_b ~ dgamma(0.5 * nu, 0.5 * delta * nu)
+    delta ~ dgamma(a_delta, d_delta)
 
   }
   "
